@@ -9,8 +9,6 @@ Live: https://USERNAME.github.io/REPO/
 |---|---|
 | `index.html` | landing page |
 | `slide.html` | all three pitfalls as one 16:9 presentation slide |
-| `pitfall2.html` | long-form: unsupervised score in low-density regions |
-| `pitfall3.html` | long-form: the score is blind to mixture weights |
 
 Every page is a single self-contained HTML file: no dependencies, no CDN,
 no build step. Open any of them directly from disk, or serve the folder
