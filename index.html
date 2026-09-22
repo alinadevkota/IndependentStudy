@@ -3,8 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Why score-based models add noise — interactive figures</title>
-<meta name="description" content="Interactive simulations of the three failure modes of score matching, and how Gaussian perturbation fixes all of them.">
+<title>Diffusion Models Independent Study</title>
 <style>
   :root{
     box-sizing:border-box;
@@ -57,8 +56,7 @@
 <body>
 <div class="wrap">
 
-  <h1>Why score-based generative models add noise</h1>
-  <p class="lede">Three interactive figures for the failure modes of score matching on real data, and what Gaussian perturbation does about each one. Everything runs live in the browser — the simulations are real, including a score model that is genuinely fit by denoising score matching while you watch.</p>
+  <h1>Diffusion Models — Independent Study</h1>
 
   <div class="cards" style="margin-top:28px">
 
@@ -69,20 +67,6 @@
     </a>
 
   </div>
-
-  <hr>
-
-  <h3>What each figure computes</h3>
-  <ul>
-    <li><b>Pitfall 1</b> — a 1-D closed curve embedded in 2-D. The perturbed score is the true convolution, summed over arc-length-weighted points on the manifold with log-sum-exp stabilization, so it stays exact down to σ = 0.004.</li>
-    <li><b>Pitfall 2</b> — 100 random Fourier features, 1500 DSM pairs, ridge regression solved by Cholesky, refit on every change of σ including each rung of the annealing ladder.</li>
-    <li><b>Pitfall 3</b> — analytic two-component mixture; Euler–Maruyama Langevin on 700 particles with live barrier-crossing statistics.</li>
-  </ul>
-
-  <h3>Source</h3>
-  <p class="small">The construction follows Yang Song and Stefano Ermon, <i>Generative Modeling by Estimating Gradients of the Data Distribution</i>, NeurIPS 2019 — <a href="https://arxiv.org/abs/1907.05600">arXiv:1907.05600</a> — and Song's <a href="https://yang-song.net/blog/2021/score/">introduction to score-based models</a>.</p>
-
-  <p class="meta">Static pages, no dependencies, no build step. Each file is self-contained and can be opened directly from disk.</p>
 
 </div>
 </body>
