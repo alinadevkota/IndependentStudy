@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Why score-based models add noise — interactive figures</title>
+<meta name="description" content="Interactive simulations of the three failure modes of score matching, and how Gaussian perturbation fixes all of them.">
+<style>
+  :root{
+    box-sizing:border-box;
+    padding-top:env(safe-area-inset-top,0px);
+    padding-bottom:env(safe-area-inset-bottom,0px);
+    --bg:#fbfaf8; --card:#fff; --sunk:#f2efe9;
+    --ink:#1a1918; --ink-2:#56524a; --ink-3:#8b8780;
+    --rule:#e3e0da; --rule-2:#cfcbc3; --accent:#6b4fbb;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#111216; --card:#1a1c21; --sunk:#22252b;
+      --ink:#eceaf0; --ink-2:#b3b0ba; --ink-3:#7e7b87;
+      --rule:#2c2f36; --rule-2:#3c4048; --accent:#a58bef;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#111216; --card:#1a1c21; --sunk:#22252b;
+    --ink:#eceaf0; --ink-2:#b3b0ba; --ink-3:#7e7b87;
+    --rule:#2c2f36; --rule-2:#3c4048; --accent:#a58bef;
+  }
+  *{box-sizing:border-box}
+  html{scroll-padding-top:env(safe-area-inset-top,0px)}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:ui-sans-serif,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:16px;line-height:1.55;-webkit-font-smoothing:antialiased}
+  .wrap{max-width:820px;margin:0 auto;padding:56px 20px 80px}
+  .mono{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.92em}
+  h1{font-size:clamp(26px,4.4vw,38px);line-height:1.15;margin:0 0 14px;letter-spacing:-.02em;font-weight:660}
+  .lede{color:var(--ink-2);margin:0 0 6px;font-size:17px}
+  .meta{color:var(--ink-3);font-size:14px;margin:18px 0 0}
+  .meta a{color:var(--ink-2)}
+  hr{border:0;border-top:1px solid var(--rule);margin:36px 0}
+  .cards{display:grid;gap:14px}
+  a.card{display:block;text-decoration:none;color:inherit;background:var(--card);
+    border:1px solid var(--rule);border-radius:14px;padding:18px 20px;transition:border-color .15s,transform .15s}
+  a.card:hover{border-color:var(--accent);transform:translateY(-1px)}
+  .tag{font-size:12px;text-transform:uppercase;letter-spacing:.08em;color:var(--accent);font-weight:650}
+  a.card h2{font-size:19px;margin:5px 0 7px;font-weight:620;letter-spacing:-.01em}
+  a.card p{margin:0;color:var(--ink-2);font-size:14.5px}
+  .feature{background:linear-gradient(180deg,var(--card),var(--sunk))}
+  .kbd{display:inline-block;background:var(--sunk);border:1px solid var(--rule-2);border-radius:5px;
+    padding:1px 6px;font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12.5px;color:var(--ink-2)}
+  h3{font-size:15px;margin:30px 0 8px;font-weight:640}
+  p.small{font-size:14.5px;color:var(--ink-2);margin:0 0 10px}
+  ul{padding-left:20px;color:var(--ink-2);font-size:14.5px;margin:0}
+  li{margin-bottom:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>Why score-based generative models add noise</h1>
+  <p class="lede">Three interactive figures for the failure modes of score matching on real data, and what Gaussian perturbation does about each one. Everything runs live in the browser — the simulations are real, including a score model that is genuinely fit by denoising score matching while you watch.</p>
+
+  <div class="cards" style="margin-top:28px">
+
+    <a class="card feature" href="slide.html">
+      <div class="tag">Presentation</div>
+      <h2>All three pitfalls — one 16:9 slide</h2>
+      <p>Tabbed, fullscreen-ready, keyboard driven. <span class="kbd">←</span> <span class="kbd">→</span> switch · <span class="kbd">space</span> pause · <span class="kbd">a</span> anneal · <span class="kbd">r</span> reset · <span class="kbd">f</span> fullscreen. This is the one to project.</p>
+    </a>
+
+    <a class="card" href="pitfall2.html">
+      <div class="tag">Pitfall 2 · long form</div>
+      <h2>The score is never taught where there is no data</h2>
+      <p>The loss is an expectation under <span class="mono">p<sub>data</sub></span>, so empty regions carry no weight — yet Langevin starts there almost surely. A random-Fourier-feature model is fit by DSM in closed form at every noise level, so the nonsense in the corners is real extrapolation. Includes the conditional-target figure.</p>
+    </a>
+
+    <a class="card" href="pitfall3.html">
+      <div class="tag">Pitfall 3 · long form</div>
+      <h2>The score is blind to mixture weights</h2>
+      <p>For <span class="mono">p = π p₁ + (1−π) p₂</span> with separated modes, π cancels out of <span class="mono">∇ log p</span> entirely. Overlay the score at a different π and watch the two curves sit exactly on top of each other. Includes the responsibility panel that shows why.</p>
+    </a>
+
+  </div>
+
+  <hr>
+
+  <h3>What each figure computes</h3>
+  <ul>
+    <li><b>Pitfall 1</b> — a 1-D closed curve embedded in 2-D. The perturbed score is the true convolution, summed over arc-length-weighted points on the manifold with log-sum-exp stabilization, so it stays exact down to σ = 0.004.</li>
+    <li><b>Pitfall 2</b> — 100 random Fourier features, 1500 DSM pairs, ridge regression solved by Cholesky, refit on every change of σ including each rung of the annealing ladder.</li>
+    <li><b>Pitfall 3</b> — analytic two-component mixture; Euler–Maruyama Langevin on 700 particles with live barrier-crossing statistics.</li>
+  </ul>
+
+  <h3>Source</h3>
+  <p class="small">The construction follows Yang Song and Stefano Ermon, <i>Generative Modeling by Estimating Gradients of the Data Distribution</i>, NeurIPS 2019 — <a href="https://arxiv.org/abs/1907.05600">arXiv:1907.05600</a> — and Song's <a href="https://yang-song.net/blog/2021/score/">introduction to score-based models</a>.</p>
+
+  <p class="meta">Static pages, no dependencies, no build step. Each file is self-contained and can be opened directly from disk.</p>
+
+</div>
+</body>
+</html>

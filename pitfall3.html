@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Pitfall 3 — the score cannot see mixture weights</title>
+<style>
+  :root{
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+
+    --bg: #fbfaf8;
+    --panel: #ffffff;
+    --panel-2: #f4f2ee;
+    --ink: #1c1b19;
+    --ink-2: #57544e;
+    --ink-3: #8b8780;
+    --rule: #e3e0da;
+    --rule-2: #cfcbc3;
+    --m1: #2f6fd0;          /* heavy mode */
+    --m1-soft: rgba(47,111,208,.16);
+    --m2: #cc5a2b;          /* light mode */
+    --m2-soft: rgba(204,90,43,.16);
+    --curve: #1c1b19;
+    --ghost: #9b9790;       /* the pi = 0.5 comparison curve */
+    --good: #2e7d5b;
+    --bad: #b5402c;
+    --accent: #6b4fbb;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg: #15161a;
+      --panel: #1c1e23;
+      --panel-2: #23262c;
+      --ink: #eceaf0;
+      --ink-2: #b3b0ba;
+      --ink-3: #7e7b87;
+      --rule: #2e3138;
+      --rule-2: #3d414a;
+      --m1: #6ba3f5;
+      --m1-soft: rgba(107,163,245,.18);
+      --m2: #f08b57;
+      --m2-soft: rgba(240,139,87,.18);
+      --curve: #eceaf0;
+      --ghost: #7e7b87;
+      --good: #5fc295;
+      --bad: #f0715a;
+      --accent: #a58bef;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg: #15161a; --panel: #1c1e23; --panel-2: #23262c;
+    --ink: #eceaf0; --ink-2: #b3b0ba; --ink-3: #7e7b87;
+    --rule: #2e3138; --rule-2: #3d414a;
+    --m1: #6ba3f5; --m1-soft: rgba(107,163,245,.18);
+    --m2: #f08b57; --m2-soft: rgba(240,139,87,.18);
+    --curve: #eceaf0; --ghost: #7e7b87;
+    --good: #5fc295; --bad: #f0715a; --accent: #a58bef;
+  }
+
+  *{ box-sizing: border-box; }
+  html{ scroll-padding-top: env(safe-area-inset-top, 0px); }
+  body{
+    margin:0; background: var(--bg); color: var(--ink);
+    font-family: ui-sans-serif, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    font-size: 15px; line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+  }
+  .wrap{ max-width: 960px; margin: 0 auto; padding: 28px 18px 64px; }
+
+  header h1{
+    font-size: clamp(21px, 3.4vw, 28px); line-height:1.2; margin:0 0 6px;
+    letter-spacing:-.015em; font-weight:650;
+  }
+  header p{ margin:0 0 4px; color: var(--ink-2); max-width: 62ch; }
+  .eq{ font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size:.92em; }
+
+  .card{
+    background: var(--panel); border:1px solid var(--rule); border-radius: 14px;
+    padding: 14px 14px 12px; margin-top: 16px;
+  }
+  .card h2{
+    font-size: 13px; text-transform: uppercase; letter-spacing:.07em;
+    color: var(--ink-3); margin:0 0 2px; font-weight:600;
+  }
+  .card .sub{ font-size: 13.5px; color: var(--ink-2); margin: 0 0 10px; }
+
+  canvas{ display:block; width:100%; height:auto; touch-action: pan-y; }
+
+  /* controls */
+  .controls{
+    display:grid; gap:14px 22px; grid-template-columns: repeat(auto-fit, minmax(230px,1fr));
+    align-items:end;
+  }
+  .ctl label{ display:block; font-size:12.5px; color: var(--ink-2); margin-bottom:5px; }
+  .ctl label b{ color: var(--ink); font-weight:600; }
+  .ctl .val{ font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--ink); }
+  input[type=range]{
+    width:100%; accent-color: var(--accent); height: 22px; margin:0;
+  }
+  .btns{ display:flex; flex-wrap:wrap; gap:8px; margin-top:12px; }
+  button{
+    font: inherit; font-size:13.5px; font-weight:550;
+    background: var(--panel-2); color: var(--ink);
+    border:1px solid var(--rule-2); border-radius:9px;
+    padding:7px 13px; cursor:pointer;
+  }
+  button:hover{ border-color: var(--ink-3); }
+  button.primary{ background: var(--accent); border-color: var(--accent); color:#fff; }
+  button.primary:hover{ filter: brightness(1.08); }
+  .chk{ display:flex; align-items:center; gap:7px; font-size:13px; color: var(--ink-2); }
+  .chk input{ accent-color: var(--accent); width:15px; height:15px; }
+
+  /* readouts */
+  .readout{ display:grid; gap:12px; grid-template-columns: repeat(auto-fit,minmax(150px,1fr)); margin-top:4px; }
+  .stat{ background: var(--panel-2); border-radius:10px; padding:9px 11px; }
+  .stat .k{ font-size:11.5px; letter-spacing:.04em; text-transform:uppercase; color: var(--ink-3); }
+  .stat .v{ font-family: ui-monospace, Menlo, Consolas, monospace; font-size:19px; margin-top:2px; }
+  .v.good{ color: var(--good); } .v.bad{ color: var(--bad); }
+
+  .massbar{ position:relative; height:26px; border-radius:7px; overflow:hidden; background: var(--panel-2); margin-top:10px; display:flex; }
+  .massbar .seg{ height:100%; display:flex; align-items:center; font-size:12px; font-weight:600; color:#fff;
+                 justify-content:center; transition: width .12s linear; white-space:nowrap; overflow:hidden; }
+  .massbar .s1{ background: var(--m1); } .massbar .s2{ background: var(--m2); }
+  .massbar .target{ position:absolute; top:-3px; bottom:-3px; width:2px; background: var(--ink); }
+  .massbar .target::after{
+    content:""; position:absolute; left:50%; top:0; transform:translateX(-50%);
+    border-left:5px solid transparent; border-right:5px solid transparent; border-top:6px solid var(--ink);
+  }
+  .legend{ display:flex; flex-wrap:wrap; gap:14px; font-size:12.5px; color: var(--ink-2); margin-bottom:8px; }
+  .legend i{ display:inline-block; width:15px; height:3px; border-radius:2px; vertical-align:middle; margin-right:5px; }
+  .note{ font-size:13.5px; color: var(--ink-2); margin:10px 0 0; }
+  .note b{ color: var(--ink); font-weight:600; }
+  ol.tries{ margin:8px 0 0; padding-left:20px; color: var(--ink-2); font-size:14px; }
+  ol.tries li{ margin-bottom:7px; }
+  ol.tries b{ color: var(--ink); font-weight:600; }
+  .status{ font-family: ui-monospace, Menlo, Consolas, monospace; font-size:12.5px; color: var(--accent); min-height:1.4em; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header>
+  <h1>The score is blind to mixture weights</h1>
+  <p>A two-mode target: <span class="eq">p(x) = π·p₁(x) + (1−π)·p₂(x)</span>, with π of the mass on the left. Langevin dynamics is driven only by <span class="eq">∇ₓ log p<sub>σ</sub>(x)</span>. Watch what the particles do as you change the noise level σ.</p>
+</header>
+
+<div class="card">
+  <div class="controls">
+    <div class="ctl">
+      <label><b>noise level σ</b> &nbsp; <span class="val" id="lblSigma">0.05</span></label>
+      <input type="range" id="sigma" min="0" max="240" value="5">
+    </div>
+    <div class="ctl">
+      <label><b>true weight π</b> (left mode) &nbsp; <span class="val" id="lblPi">0.80</span></label>
+      <input type="range" id="pi" min="50" max="95" value="80">
+    </div>
+  </div>
+  <div class="btns">
+    <button class="primary" id="btnAnneal">▶ Run annealed Langevin</button>
+    <button id="btnPlay">Pause</button>
+    <button id="btnReset">Reset particles</button>
+    <label class="chk"><input type="checkbox" id="chkGhost" checked> overlay the score for π = 0.5</label>
+  </div>
+  <div class="status" id="status">&nbsp;</div>
+</div>
+
+<div class="card">
+  <h2>1 · Perturbed density and the particle cloud</h2>
+  <p class="sub">Solid curve: <span class="eq">p<sub>σ</sub></span>, what Langevin actually samples. Bars: the empirical histogram of 700 particles. Dots below: the particles themselves.</p>
+  <div class="legend">
+    <span><i style="background:var(--m1)"></i>left mode (weight π)</span>
+    <span><i style="background:var(--m2)"></i>right mode (weight 1−π)</span>
+    <span><i style="background:var(--curve)"></i>p<sub>σ</sub>(x)</span>
+  </div>
+  <canvas id="cDens"></canvas>
+</div>
+
+<div class="card">
+  <h2>2 · The score <span class="eq">∇ₓ log p<sub>σ</sub>(x)</span></h2>
+  <p class="sub">The grey dashed curve is the score of the <em>same</em> mixture but with π = 0.5. At small σ the two curves lie exactly on top of each other everywhere that matters — the weight is invisible to the score. Raise σ and they separate.</p>
+  <canvas id="cScore"></canvas>
+  <p class="note" id="gap">&nbsp;</p>
+</div>
+
+<div class="card">
+  <h2>3 · Why: the responsibility <span class="eq">r₁(x)</span></h2>
+  <p class="sub">The score is a responsibility-weighted average of the two local scores: <span class="eq">∇log p<sub>σ</sub> = r₁·(μ₁−x)/v + (1−r₁)·(μ₂−x)/v</span>. π enters <em>only</em> through r₁. At small σ, r₁ is a hard step — it is 1 or 0 no matter what π is, so π cancels. Noise turns the step into a ramp whose height carries π.</p>
+  <canvas id="cResp"></canvas>
+</div>
+
+<div class="card">
+  <h2>4 · Recovered mass vs. truth</h2>
+  <div class="massbar" id="massbar">
+    <div class="seg s1" id="segL" style="width:50%">left</div>
+    <div class="seg s2" id="segR" style="width:50%">right</div>
+    <div class="target" id="tgt" style="left:80%"></div>
+  </div>
+  <div class="readout" style="margin-top:12px">
+    <div class="stat"><div class="k">measured left mass</div><div class="v" id="stMeas">—</div></div>
+    <div class="stat"><div class="k">target π</div><div class="v" id="stTgt">0.80</div></div>
+    <div class="stat"><div class="k">barrier crossings / 1k steps</div><div class="v" id="stCross">0.0</div></div>
+    <div class="stat"><div class="k">mode sharpness (σ)</div><div class="v" id="stSharp">—</div></div>
+  </div>
+  <p class="note" id="verdict">&nbsp;</p>
+</div>
+
+<div class="card">
+  <h2>What to try</h2>
+  <ol class="tries">
+    <li><b>Leave σ at 0.05 and hit Reset.</b> Particles start spread out, fall into whichever mode is nearest, and freeze. The black marker shows the target of 0.80 — the bar sits near 0.50. The modes are perfect, the weights are wrong, and crossings/1k steps is essentially zero. This is the pitfall.</li>
+    <li><b>Drag σ up to ~2.5.</b> The valley fills in, the two score curves visibly separate, r₁ becomes a smooth ramp, and the bar slides to 0.80. Correct weights — but the density is now a single blurred blob, not the data.</li>
+    <li><b>Hit "Run annealed Langevin".</b> σ walks down a geometric ladder. The large levels settle <em>which</em> mode and in what proportion; the small levels sharpen the shape. You end with both the right weights and the right modes — which is the whole point of the noise schedule.</li>
+    <li><b>Push π to 0.95 at σ = 0.05</b> and watch the score panel: the solid and dashed curves still overlap. A 19:1 mass ratio and a 1:1 mass ratio produce literally the same gradient field.</li>
+  </ol>
+</div>
+
+</div>
+
+<script>
+(function(){
+  "use strict";
+
+  /* ---------- model ---------- */
+  const MU1 = -3, MU2 = 3, S0 = 0.6;      // mode centres, intrinsic width
+  const XMIN = -9, XMAX = 9;
+  const N = 700;                           // particles
+  const EPS = 0.045;                       // Langevin step size
+  const STEPS_PER_FRAME = 3;
+
+  let sigma = 0.05, piW = 0.80;
+  let running = true, showGhost = true;
+
+  const varOf = s => S0*S0 + s*s;
+
+  function resp1(x, s, p){                 // responsibility of mode 1
+    const v = varOf(s);
+    const a1 = Math.log(p)     - (x-MU1)*(x-MU1)/(2*v);
+    const a2 = Math.log(1-p)   - (x-MU2)*(x-MU2)/(2*v);
+    const m = Math.max(a1,a2);
+    const w1 = Math.exp(a1-m), w2 = Math.exp(a2-m);
+    return w1/(w1+w2);
+  }
+  function score(x, s, p){
+    const v = varOf(s), r = resp1(x,s,p);
+    return (r*(MU1-x) + (1-r)*(MU2-x))/v;
+  }
+  function dens(x, s, p){
+    const v = varOf(s), c = 1/Math.sqrt(2*Math.PI*v);
+    return c*(p*Math.exp(-(x-MU1)*(x-MU1)/(2*v)) + (1-p)*Math.exp(-(x-MU2)*(x-MU2)/(2*v)));
+  }
+  function densComp(x, s, p, k){
+    const v = varOf(s), c = 1/Math.sqrt(2*Math.PI*v);
+    return k===1 ? c*p*Math.exp(-(x-MU1)*(x-MU1)/(2*v))
+                 : c*(1-p)*Math.exp(-(x-MU2)*(x-MU2)/(2*v));
+  }
+
+  /* ---------- particles ---------- */
+  const X = new Float64Array(N);
+  const sideWas = new Int8Array(N);
+  let crossings = 0, stepsDone = 0, crossRate = 0;
+
+  let spare = null;
+  function randn(){
+    if(spare !== null){ const v = spare; spare = null; return v; }
+    let u=0,v=0,s=0;
+    do{ u = Math.random()*2-1; v = Math.random()*2-1; s = u*u+v*v; } while(s===0||s>=1);
+    const f = Math.sqrt(-2*Math.log(s)/s);
+    spare = v*f; return u*f;
+  }
+  function resetParticles(){
+    for(let i=0;i<N;i++){
+      X[i] = XMIN + 1.2 + Math.random()*(XMAX-XMIN-2.4);
+      sideWas[i] = X[i] < 0 ? -1 : 1;
+    }
+    crossings = 0; stepsDone = 0; crossRate = 0;
+  }
+  resetParticles();
+
+  function langevinStep(){
+    const sq = Math.sqrt(EPS);
+    for(let i=0;i<N;i++){
+      let x = X[i];
+      x = x + 0.5*EPS*score(x, sigma, piW) + sq*randn();
+      if(x < XMIN) x = XMIN + (XMIN - x)*0.2;
+      if(x > XMAX) x = XMAX - (x - XMAX)*0.2;
+      const sd = x < 0 ? -1 : 1;
+      if(sd !== sideWas[i]){ crossings++; sideWas[i] = sd; }
+      X[i] = x;
+    }
+    stepsDone++;
+    if(stepsDone % 25 === 0){
+      const r = crossings/(N*stepsDone)*1000;
+      crossRate = crossRate*0.7 + r*0.3;
+      crossings = 0; stepsDone = 0;
+    }
+  }
+
+  /* ---------- annealing ---------- */
+  const SIG_HI = 2.6, SIG_LO = 0.05, LEVELS = 12, HOLD = 190;
+  let annealing = false, aLevel = 0, aTick = 0;
+  function sigAt(k){ return SIG_HI*Math.pow(SIG_LO/SIG_HI, k/(LEVELS-1)); }
+
+  /* ---------- palette ---------- */
+  let P = {};
+  function readPalette(){
+    const cs = getComputedStyle(document.documentElement);
+    const g = n => cs.getPropertyValue(n).trim();
+    P = { panel:g('--panel'), panel2:g('--panel-2'), ink:g('--ink'), ink2:g('--ink-2'),
+          ink3:g('--ink-3'), rule:g('--rule'), rule2:g('--rule-2'),
+          m1:g('--m1'), m1s:g('--m1-soft'), m2:g('--m2'), m2s:g('--m2-soft'),
+          curve:g('--curve'), ghost:g('--ghost'), accent:g('--accent') };
+  }
+  readPalette();
+  if(window.matchMedia) try{
+    window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', readPalette);
+  }catch(e){}
+
+  /* ---------- canvas plumbing ---------- */
+  function setup(id, hCss){
+    const c = document.getElementById(id);
+    const ctx = c.getContext('2d');
+    const o = { c, ctx, w:0, h:hCss, dpr:1 };
+    function fit(){
+      const rect = c.getBoundingClientRect();
+      const dpr = Math.min(window.devicePixelRatio||1, 2.5);
+      const w = Math.max(280, rect.width || c.parentElement.clientWidth);
+      o.w = w; o.dpr = dpr;
+      c.width = Math.round(w*dpr); c.height = Math.round(hCss*dpr);
+      c.style.height = hCss+'px';
+      ctx.setTransform(dpr,0,0,dpr,0,0);
+    }
+    o.fit = fit; fit();
+    if(window.ResizeObserver) new ResizeObserver(fit).observe(c.parentElement);
+    else window.addEventListener('resize', fit);
+    return o;
+  }
+  const PAD = 34;
+  const dens_ = setup('cDens', 268);
+  const sco_  = setup('cScore', 196);
+  const res_  = setup('cResp', 118);
+
+  const xp = (o,x) => PAD + (x-XMIN)/(XMAX-XMIN)*(o.w-PAD-14);
+
+  function axis(o, y0, label){
+    const ctx = o.ctx;
+    ctx.strokeStyle = P.rule2; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.moveTo(PAD, y0+.5); ctx.lineTo(o.w-14, y0+.5); ctx.stroke();
+    ctx.fillStyle = P.ink3; ctx.font = '11px ui-monospace, Menlo, monospace';
+    ctx.textAlign = 'center';
+    for(let x=-8;x<=8;x+=2){
+      const px = xp(o,x);
+      ctx.beginPath(); ctx.moveTo(px, y0); ctx.lineTo(px, y0+4); ctx.stroke();
+      ctx.fillText(String(x), px, y0+16);
+    }
+    if(label){ ctx.textAlign='left'; ctx.fillText(label, PAD, 13); }
+  }
+
+  /* ---------- panel 1 ---------- */
+  let yMaxSmooth = 0.55;
+  const BINS = 72;
+  const hist = new Float64Array(BINS);
+
+  function drawDensity(){
+    const o = dens_, ctx = o.ctx, W = o.w, H = o.h;
+    ctx.clearRect(0,0,W,H);
+    const stripH = 50, y0 = H - 26 - stripH, top = 16;
+
+    // adaptive y scale
+    let ym = 0;
+    for(let i=0;i<=240;i++){ const x = XMIN + (XMAX-XMIN)*i/240; ym = Math.max(ym, dens(x,sigma,piW)); }
+    ym = Math.max(ym, 0.08);
+    yMaxSmooth += (ym*1.18 - yMaxSmooth)*0.14;
+    const yp = v => y0 - (v/yMaxSmooth)*(y0-top);
+
+    // histogram
+    hist.fill(0);
+    const bw = (XMAX-XMIN)/BINS;
+    for(let i=0;i<N;i++){
+      let b = Math.floor((X[i]-XMIN)/bw); if(b<0)b=0; if(b>=BINS)b=BINS-1;
+      hist[b]++;
+    }
+    for(let b=0;b<BINS;b++){
+      const d = hist[b]/(N*bw); if(d<=0) continue;
+      const x0 = xp(o, XMIN + b*bw), x1 = xp(o, XMIN + (b+1)*bw);
+      const cx = XMIN + (b+0.5)*bw;
+      ctx.fillStyle = cx < 0 ? P.m1s : P.m2s;
+      const yy = Math.max(top, yp(d));
+      ctx.fillRect(x0, yy, Math.max(1,x1-x0-0.6), y0-yy);
+    }
+
+    // component curves
+    [1,2].forEach(k=>{
+      ctx.strokeStyle = k===1?P.m1:P.m2; ctx.lineWidth = 1.4;
+      ctx.setLineDash([4,3]); ctx.beginPath();
+      for(let i=0;i<=320;i++){
+        const x = XMIN + (XMAX-XMIN)*i/320;
+        const py = yp(densComp(x,sigma,piW,k));
+        i? ctx.lineTo(xp(o,x), py) : ctx.moveTo(xp(o,x), py);
+      }
+      ctx.stroke(); ctx.setLineDash([]);
+    });
+
+    // full density
+    ctx.strokeStyle = P.curve; ctx.lineWidth = 2.1; ctx.beginPath();
+    for(let i=0;i<=400;i++){
+      const x = XMIN + (XMAX-XMIN)*i/400;
+      const py = yp(dens(x,sigma,piW));
+      i? ctx.lineTo(xp(o,x), py) : ctx.moveTo(xp(o,x), py);
+    }
+    ctx.stroke();
+
+    // valley marker
+    const dv = dens(0,sigma,piW), dm = dens(MU1,sigma,piW);
+    ctx.strokeStyle = P.rule2; ctx.setLineDash([2,4]); ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(xp(o,0), top); ctx.lineTo(xp(o,0), y0); ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.fillStyle = P.ink3; ctx.font='11px ui-sans-serif, system-ui, sans-serif';
+    ctx.textAlign='center';
+    const ratio = dv/dm;
+    ctx.fillText('valley: p(0)/p(μ₁) = ' + (ratio<1e-4 ? ratio.toExponential(1) : ratio.toFixed(3)),
+                 xp(o,0), top+12);
+
+    axis(o, y0, 'density  p' + '\u03C3' + '(x)');
+
+    // particle strip
+    const sy = y0 + 26;
+    ctx.fillStyle = P.panel2;
+    ctx.beginPath();
+    (ctx.roundRect ? ctx.roundRect(PAD, sy, W-PAD-14, stripH, 8) : ctx.rect(PAD, sy, W-PAD-14, stripH));
+    ctx.fill();
+    for(let i=0;i<N;i++){
+      const px = xp(o, X[i]);
+      const py = sy + 7 + ((i*2654435761)%1000)/1000*(stripH-14);
+      ctx.fillStyle = X[i] < 0 ? P.m1 : P.m2;
+      ctx.globalAlpha = 0.55;
+      ctx.fillRect(px-1.1, py-1.1, 2.2, 2.2);
+    }
+    ctx.globalAlpha = 1;
+    ctx.fillStyle = P.ink3; ctx.font='10.5px ui-sans-serif, system-ui, sans-serif';
+    ctx.textAlign='left'; ctx.fillText('particles', PAD+6, sy+12);
+  }
+
+  /* ---------- panel 2 ---------- */
+  function drawScore(){
+    const o = sco_, ctx = o.ctx, W = o.w, H = o.h;
+    ctx.clearRect(0,0,W,H);
+    const top = 18, bot = H-24, mid = (top+bot)/2;
+    const SMAX = 9;
+    const yp = v => mid - Math.max(-SMAX, Math.min(SMAX, v))/SMAX*(mid-top);
+
+    // zero line + mode marks
+    ctx.strokeStyle = P.rule; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.moveTo(PAD, mid); ctx.lineTo(W-14, mid); ctx.stroke();
+    [MU1,MU2].forEach((m,k)=>{
+      ctx.strokeStyle = k?P.m2:P.m1; ctx.globalAlpha=.35; ctx.setLineDash([3,4]);
+      ctx.beginPath(); ctx.moveTo(xp(o,m), top); ctx.lineTo(xp(o,m), bot); ctx.stroke();
+      ctx.setLineDash([]); ctx.globalAlpha=1;
+    });
+
+    function curve(p, color, dash, width){
+      ctx.strokeStyle=color; ctx.lineWidth=width; ctx.setLineDash(dash);
+      ctx.beginPath();
+      for(let i=0;i<=500;i++){
+        const x = XMIN + (XMAX-XMIN)*i/500;
+        const py = yp(score(x,sigma,p));
+        i? ctx.lineTo(xp(o,x), py) : ctx.moveTo(xp(o,x), py);
+      }
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+    if(showGhost) curve(0.5, P.ghost, [6,4], 2.4);
+    curve(piW, P.accent, [], 2.1);
+
+    ctx.fillStyle = P.ink3; ctx.font='11px ui-monospace, Menlo, monospace';
+    ctx.textAlign='left'; ctx.fillText('\u2207 log p'+'\u03C3'+'(x)   (clipped at \u00B19)', PAD, 12);
+    ctx.textAlign='right';
+    ctx.fillStyle = P.accent; ctx.fillText('\u03C0 = '+piW.toFixed(2), W-16, 12);
+    if(showGhost){ ctx.fillStyle = P.ghost; ctx.fillText('\u03C0 = 0.50', W-16, 26); }
+    axis(o, bot, null);
+
+    // how far apart are the two curves?
+    let gap = 0;
+    for(let i=0;i<=400;i++){
+      const x = XMIN + (XMAX-XMIN)*i/400;
+      const w = dens(x,sigma,piW);
+      gap = Math.max(gap, Math.abs(score(x,sigma,piW)-score(x,sigma,0.5)) * (w>0.004?1:0));
+    }
+    const el = document.getElementById('gap');
+    if(gap < 0.02){
+      el.innerHTML = '<b>Largest difference between the two curves, anywhere the data actually lives: '+gap.toFixed(4)+'.</b> The two mixtures are indistinguishable to Langevin dynamics.';
+    } else {
+      el.innerHTML = 'Largest difference between the two curves where the data lives: <b>'+gap.toFixed(3)+'</b>. The score now carries information about π.';
+    }
+  }
+
+  /* ---------- panel 3 ---------- */
+  function drawResp(){
+    const o = res_, ctx = o.ctx, W = o.w, H = o.h;
+    ctx.clearRect(0,0,W,H);
+    const top = 16, bot = H-24;
+    const yp = v => bot - v*(bot-top);
+
+    ctx.strokeStyle = P.rule; ctx.lineWidth=1; ctx.setLineDash([2,4]);
+    [0.5,1].forEach(v=>{ ctx.beginPath(); ctx.moveTo(PAD, yp(v)); ctx.lineTo(W-14, yp(v)); ctx.stroke(); });
+    ctx.setLineDash([]);
+
+    // fill under curve
+    ctx.beginPath();
+    for(let i=0;i<=400;i++){
+      const x = XMIN + (XMAX-XMIN)*i/400;
+      const py = yp(resp1(x,sigma,piW));
+      i? ctx.lineTo(xp(o,x), py) : ctx.moveTo(xp(o,x), py);
+    }
+    ctx.lineTo(W-14, bot); ctx.lineTo(PAD, bot); ctx.closePath();
+    ctx.fillStyle = P.m1s; ctx.fill();
+
+    ctx.strokeStyle = P.m1; ctx.lineWidth = 2.1; ctx.beginPath();
+    for(let i=0;i<=400;i++){
+      const x = XMIN + (XMAX-XMIN)*i/400;
+      const py = yp(resp1(x,sigma,piW));
+      i? ctx.lineTo(xp(o,x), py) : ctx.moveTo(xp(o,x), py);
+    }
+    ctx.stroke();
+
+    if(showGhost){
+      ctx.strokeStyle = P.ghost; ctx.lineWidth=2; ctx.setLineDash([6,4]); ctx.beginPath();
+      for(let i=0;i<=400;i++){
+        const x = XMIN + (XMAX-XMIN)*i/400;
+        const py = yp(resp1(x,sigma,0.5));
+        i? ctx.lineTo(xp(o,x), py) : ctx.moveTo(xp(o,x), py);
+      }
+      ctx.stroke(); ctx.setLineDash([]);
+    }
+
+    ctx.fillStyle = P.ink3; ctx.font='11px ui-monospace, Menlo, monospace';
+    ctx.textAlign='left'; ctx.fillText('r\u2081(x)', PAD, 12);
+    ctx.textAlign='right'; ctx.fillText('1.0', PAD-6, yp(1)+4);
+    ctx.fillText('0.5', PAD-6, yp(0.5)+4);
+    ctx.fillText('0.0', PAD-6, yp(0)+4);
+    axis(o, bot, null);
+  }
+
+  /* ---------- readouts ---------- */
+  const segL = document.getElementById('segL'), segR = document.getElementById('segR');
+  const tgt = document.getElementById('tgt');
+  const stMeas = document.getElementById('stMeas'), stTgt = document.getElementById('stTgt');
+  const stCross = document.getElementById('stCross'), stSharp = document.getElementById('stSharp');
+  const verdict = document.getElementById('verdict');
+
+  function drawReadout(){
+    let nl = 0;
+    for(let i=0;i<N;i++) if(X[i] < 0) nl++;
+    const frac = nl/N;
+    segL.style.width = (frac*100).toFixed(1)+'%';
+    segR.style.width = ((1-frac)*100).toFixed(1)+'%';
+    segL.textContent = frac > 0.12 ? frac.toFixed(2) : '';
+    segR.textContent = (1-frac) > 0.12 ? (1-frac).toFixed(2) : '';
+    tgt.style.left = (piW*100).toFixed(1)+'%';
+
+    const err = Math.abs(frac - piW);
+    stMeas.textContent = frac.toFixed(3);
+    stMeas.className = 'v ' + (err < 0.04 ? 'good' : (err > 0.12 ? 'bad' : ''));
+    stTgt.textContent = piW.toFixed(2);
+    stCross.textContent = crossRate < 0.05 ? crossRate.toFixed(3) : crossRate.toFixed(2);
+    stCross.className = 'v ' + (crossRate < 0.02 ? 'bad' : 'good');
+    const sd = Math.sqrt(varOf(sigma));
+    stSharp.textContent = sd.toFixed(2);
+    stSharp.className = 'v ' + (sd < 0.9 ? 'good' : (sd > 1.6 ? 'bad' : ''));
+
+    if(err < 0.04 && sd < 0.9){
+      verdict.innerHTML = '<b style="color:var(--good)">Right weights and sharp modes.</b> This is only reachable by annealing — no single fixed σ gives you both.';
+    } else if(err < 0.05){
+      verdict.innerHTML = '<b>Weights recovered, but the modes are smeared.</b> You are sampling p<sub>σ</sub>, not p<sub>data</sub>. Now lower σ — and notice the weights stay put, because the particles are already in the right places.';
+    } else if(crossRate < 0.02){
+      verdict.innerHTML = '<b style="color:var(--bad)">Frozen.</b> No particle can cross the valley, so the split is whatever the initialization happened to give — not π. The modes look perfect and the sample is still wrong.';
+    } else {
+      verdict.innerHTML = 'Mixing, but slowly. Crossings are rare, so it would take an impractically long chain to reach the true proportions.';
+    }
+  }
+
+  /* ---------- controls ---------- */
+  const sSigma = document.getElementById('sigma'), sPi = document.getElementById('pi');
+  const lblSigma = document.getElementById('lblSigma'), lblPi = document.getElementById('lblPi');
+  const status = document.getElementById('status');
+
+  function sliderToSigma(v){ return +(v/100).toFixed(2); }   // 0 .. 2.40
+  function sigmaToSlider(s){ return Math.round(s*100); }
+
+  sSigma.addEventListener('input', ()=>{
+    annealing = false;
+    sigma = Math.max(0.01, sliderToSigma(+sSigma.value));
+    lblSigma.textContent = sigma.toFixed(2);
+    status.textContent = '';
+  });
+  sPi.addEventListener('input', ()=>{
+    piW = +sPi.value/100;
+    lblPi.textContent = piW.toFixed(2);
+  });
+  document.getElementById('chkGhost').addEventListener('change', e => { showGhost = e.target.checked; });
+  document.getElementById('btnReset').addEventListener('click', ()=>{
+    resetParticles(); annealing = false; status.textContent = '';
+  });
+  const btnPlay = document.getElementById('btnPlay');
+  btnPlay.addEventListener('click', ()=>{
+    running = !running; btnPlay.textContent = running ? 'Pause' : 'Resume';
+  });
+  document.getElementById('btnAnneal').addEventListener('click', ()=>{
+    resetParticles(); annealing = true; aLevel = 0; aTick = 0; running = true;
+    btnPlay.textContent = 'Pause';
+  });
+
+  lblSigma.textContent = sigma.toFixed(2);
+  sSigma.value = sigmaToSlider(sigma);
+
+  /* ---------- loop ---------- */
+  function frame(){
+    if(running){
+      if(annealing){
+        sigma = sigAt(aLevel);
+        sSigma.value = sigmaToSlider(sigma);
+        lblSigma.textContent = sigma.toFixed(2);
+        status.textContent = 'annealing \u2014 level ' + (aLevel+1) + '/' + LEVELS + '   \u03C3 = ' + sigma.toFixed(3);
+        aTick++;
+        if(aTick >= HOLD/STEPS_PER_FRAME){
+          aTick = 0;
+          if(aLevel < LEVELS-1) aLevel++;
+          else { annealing = false; status.textContent = 'annealing complete \u2014 \u03C3 = ' + sigma.toFixed(3); }
+        }
+      }
+      for(let k=0;k<STEPS_PER_FRAME;k++) langevinStep();
+    }
+    drawDensity(); drawScore(); drawResp(); drawReadout();
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
